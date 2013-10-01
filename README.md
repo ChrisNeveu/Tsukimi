@@ -1,4 +1,4 @@
 Tsukimi
 =======
 
-Toy scheme compiler
+Toy scheme interpreter.
