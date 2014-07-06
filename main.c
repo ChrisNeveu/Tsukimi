@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 
+// ◥▶◀◤
+
 typedef enum { false, true } bool;
 
+/*
 typedef struct cell
 {
 	int carTag;
@@ -14,9 +17,31 @@ typedef struct cell
 	} car;
 	struct cell* cdr;
 } cell;
+*/
 
-void eval(char* statement);
+typedef enum { Integer } primType;
 
+typedef struct expr {
+	primType type;
+	union {
+		long integer;
+	} data;
+} expr;
+
+expr* newInteger(long value) {
+	expr* expr = malloc(sizeof(expr));
+
+	(*expr).type = Integer;
+	(*expr).data.integer = value;
+	return expr;
+}
+
+bool isInteger(expr* expr) {
+	return (*expr).type == Integer;
+}
+
+expr* eval(expr* input);
+/*
 cell* readCell(FILE* stream);
 
 cell* readInt(FILE* stream);
@@ -24,6 +49,11 @@ cell* readInt(FILE* stream);
 cell* readList(FILE* stream);
 
 cell* readIdentifier(FILE* stream);
+*/
+
+expr* readExpr(FILE* stream);
+
+expr* readInteger(FILE* stream);
 
 void trimWhitespace(FILE* stream);
 
@@ -31,18 +61,26 @@ struct cell* parse(char* str);
 
 bool isDigit(char c);
 
-void print(cell* );
+void print(expr* );
+
+char peek(FILE* stream)
+{
+	char c;
+	c = getc(stream);
+	ungetc(c, stream);
+	return c;
+}
 
 int main()
 {
 	char* stmnt;
 
-	printf("Welcome to CAN-Scheme. \n--> ");
+	printf("Welcome to CAN-Scheme. \n⤿ ");
 
 	while(1)
 	{
-		print(readCell(stdin));
-		printf("\n--> ");
+		print(readExpr(stdin));
+		printf("\n⤿ ");
 	}
 
 	return 0;
@@ -69,19 +107,71 @@ void trimWhitespace(FILE* stream)
 	ungetc(c, stream);
 }
 
-void eval(char* input)
-{
-	/*char** stmnt;
-
-	stmnt = strSplit(stmnt, input, ' ');
-	int len = (sizeof(stmnt)/sizeof(stmnt[0]));
-	printf("--%i--", len);
-	for(int i = 0; i < len; i++)
-	{
-		printf("%s ", stmnt[i]);	
-	}*/
+expr* eval(expr* input) {
+	return input;
 }
 
+void print(expr* prgm) {
+	expr* cur = prgm;
+
+	if ((*cur).type == Integer) {
+		printf("%ld", (*cur).data.integer);
+	} else {
+		printf("Error: Unknown expression type.\n0");
+	}
+}
+
+int parseInt(char* intString)
+{
+	int base = 10;
+	char* leftover;
+
+	return strtol(intString, &leftover, base);
+}
+
+expr* readExpr(FILE* stream) {
+	char c;
+	expr* expr;
+
+	trimWhitespace(stream);
+
+	c = peek(stream);
+
+	if (isDigit(c) || c == '-') {
+		expr = readInteger(stream);
+	} else {
+		printf("Unexpected character '%c'\n", c);
+	}
+	return expr;
+}
+
+expr* readInteger(FILE* stream) {
+	size_t size = 32 * sizeof(char);
+	char* num = malloc(size);
+	expr* result = malloc(sizeof(expr));
+	char c;
+	int pos = 0;
+	
+	c = fgetc(stream);
+	while (c != ' ' && c != ')' && c != '\n') 
+	{
+		num[pos++] = c;
+		if (pos == sizeof(num))
+		{
+			realloc(num, sizeof(num) + size);
+		}
+		c = fgetc(stream);
+	}
+
+	if (c == ')')
+	{
+		ungetc(c, stream);
+	}
+	result = newInteger(parseInt(num));
+	return result;
+}
+
+/*
 cell* readCell(FILE* stream)
 {
 	char c;
@@ -105,31 +195,8 @@ cell* readCell(FILE* stream)
 		return readIdentifier(stream);
 	}
 }
-
-void print(cell* prgm)
-{
-	cell* cur = prgm;
-
-	printf("(");
-	while (cur != NULL)
-	{
-		if ((*cur).carTag)
-		{
-			print((*cur).car.list);
-		}
-		else
-		{
-			printf("%s", (*cur).car);
-		}
-		cur = (*cur).cdr;
-		if (cur != NULL)
-		{
-			printf(" ");
-		}
-	}
-	printf(")");
-}
-
+*/
+/*
 cell* readInt(FILE* stream)
 {
 	size_t size = 32 * sizeof(char);
@@ -159,7 +226,8 @@ cell* readInt(FILE* stream)
 	(*result).carTag = 0;
 	return result;
 }
-
+*/
+/*
 cell* readIdentifier(FILE* stream)
 {
 	size_t size = 32;
@@ -188,7 +256,8 @@ cell* readIdentifier(FILE* stream)
 	(*result).carTag = 0;
 	return result;
 }
-
+*/
+/*
 cell* readList(FILE* stream)
 {
 	char c;
@@ -217,12 +286,5 @@ cell* readList(FILE* stream)
 	c = fgetc(stream); //Pop off the \n
 	return result;
 }
-
-int parseInt(char* intString)
-{
-	int base = 10;
-	char* leftover;
-
-	return strtol(intString, &leftover, base);
-}
+*/
 
