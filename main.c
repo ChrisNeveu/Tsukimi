@@ -19,13 +19,14 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer, Boolean } primType;
+typedef enum { Integer, Boolean, Error } primType;
 
 typedef struct expr {
 	primType type;
 	union {
 		long integer;
 		bool boolean;
+		char* bottom;
 	} data;
 } expr;
 
@@ -40,12 +41,23 @@ expr* newInteger(long value) {
 	return expr;
 }
 
+expr* newError(char* error) {
+	expr* expr = malloc(sizeof(expr));
+
+	(*expr).type = Error;
+	(*expr).data.bottom = error;
+	return expr;
+}
+
 bool isInteger(expr* expr) {
 	return (*expr).type == Integer;
 }
 
 bool isBoolean(expr* expr) {
 	return (*expr).type == Boolean;
+}
+bool isError(expr* expr) {
+	return (*expr).type == Error;
 }
 
 void initialize(void) {
@@ -144,6 +156,8 @@ void print(expr* prgm) {
 		} else {
 			printf("Unexpected boolean\n");
 		}
+	} else if ((*cur).type == Error) {
+		printf("%s", (*cur).data.bottom);
 	} else {
 		printf("Error: Unknown expression type.\n0");
 	}
@@ -158,8 +172,10 @@ int parseInt(char* intString)
 }
 
 expr* readExpr(FILE* stream) {
+	size_t size = 32 * sizeof(char);
 	char c;
 	expr* expr;
+	char* s = malloc(size);
 
 	trimWhitespace(stream);
 
@@ -175,11 +191,14 @@ expr* readExpr(FILE* stream) {
 		} else if (c == 'f') {
 			expr = boolF;
 		} else {
-			printf("Unexpected character '%c' expecting 't' or 'f'.\n", c);
+			sprintf(s, "Unexpected character '%c', expecting 't' or 'f'.", c);
+			expr = newError(s);
 		}
 		getc(stream);
 	} else {
-		printf("Unexpected character '%c'\n", c);
+		sprintf(s, "Unexpected character '%c'", c);
+		expr = newError(s);
+		getc(stream);
 	}
 	return expr;
 }
