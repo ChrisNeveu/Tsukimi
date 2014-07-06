@@ -19,14 +19,18 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer } primType;
+typedef enum { Integer, Boolean } primType;
 
 typedef struct expr {
 	primType type;
 	union {
 		long integer;
+		bool boolean;
 	} data;
 } expr;
+
+expr* boolT;
+expr* boolF;
 
 expr* newInteger(long value) {
 	expr* expr = malloc(sizeof(expr));
@@ -38,6 +42,20 @@ expr* newInteger(long value) {
 
 bool isInteger(expr* expr) {
 	return (*expr).type == Integer;
+}
+
+bool isBoolean(expr* expr) {
+	return (*expr).type == Boolean;
+}
+
+void initialize(void) {
+	boolT = malloc(sizeof(expr));
+	(*boolT).type = Boolean;
+	(*boolT).data.boolean = true;
+	
+	boolF = malloc(sizeof(expr));
+	(*boolF).type = Boolean;
+	(*boolF).data.boolean = false;
 }
 
 expr* eval(expr* input);
@@ -74,6 +92,8 @@ char peek(FILE* stream)
 int main()
 {
 	char* stmnt;
+
+	initialize();
 
 	printf("Welcome to CAN-Scheme. \n⤿ ");
 
@@ -116,6 +136,14 @@ void print(expr* prgm) {
 
 	if ((*cur).type == Integer) {
 		printf("%ld", (*cur).data.integer);
+	} else if ((*cur).type == Boolean) {
+		if (cur == boolT) {
+			printf("#t");
+		} else if (cur == boolF) {
+			printf("#f");
+		} else {
+			printf("Unexpected boolean\n");
+		}
 	} else {
 		printf("Error: Unknown expression type.\n0");
 	}
@@ -135,10 +163,21 @@ expr* readExpr(FILE* stream) {
 
 	trimWhitespace(stream);
 
-	c = peek(stream);
+	c = getc(stream);
 
 	if (isDigit(c) || c == '-') {
+		ungetc(c, stream);
 		expr = readInteger(stream);
+	} else if (c == '#') {
+		c = getc(stream);
+		if (c == 't') {
+			expr = boolT;
+		} else if (c == 'f') {
+			expr = boolF;
+		} else {
+			printf("Unexpected character '%c' expecting 't' or 'f'.\n", c);
+		}
+		getc(stream);
 	} else {
 		printf("Unexpected character '%c'\n", c);
 	}
