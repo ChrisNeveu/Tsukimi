@@ -19,13 +19,14 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer, Boolean, Error } primType;
+typedef enum { Integer, Boolean, Character, Error } primType;
 
 typedef struct expr {
 	primType type;
 	union {
 		long integer;
 		bool boolean;
+		char character;
 		char* bottom;
 	} data;
 } expr;
@@ -38,6 +39,14 @@ expr* newInteger(long value) {
 
 	(*expr).type = Integer;
 	(*expr).data.integer = value;
+	return expr;
+}
+
+expr* newCharacter(char value) {
+	expr* expr = malloc(sizeof(expr));
+
+	(*expr).type = Character;
+	(*expr).data.character = value;
 	return expr;
 }
 
@@ -56,6 +65,11 @@ bool isInteger(expr* expr) {
 bool isBoolean(expr* expr) {
 	return (*expr).type == Boolean;
 }
+
+bool isCharacter(expr* expr) {
+	return (*expr).type == Character;
+}
+
 bool isError(expr* expr) {
 	return (*expr).type == Error;
 }
@@ -84,6 +98,8 @@ cell* readIdentifier(FILE* stream);
 expr* readExpr(FILE* stream);
 
 expr* readInteger(FILE* stream);
+
+expr* readCharacter(FILE* stream);
 
 void trimWhitespace(FILE* stream);
 
@@ -135,7 +151,7 @@ void trimWhitespace(FILE* stream)
 	do
 	{
 		c = fgetc(stream);
-	} while (c == ' ');
+	} while (c == ' ' || c =='\n' || c == EOF);
 	ungetc(c, stream);
 }
 
@@ -156,6 +172,8 @@ void print(expr* prgm) {
 		} else {
 			printf("Unexpected boolean\n");
 		}
+	} else if ((*cur).type == Character) {
+		printf("%c", (*cur).data.character);
 	} else if ((*cur).type == Error) {
 		printf("%s", (*cur).data.bottom);
 	} else {
@@ -190,15 +208,15 @@ expr* readExpr(FILE* stream) {
 			expr = boolT;
 		} else if (c == 'f') {
 			expr = boolF;
+		} else if (c == '\'') {
+			expr = readCharacter(stream);
 		} else {
 			sprintf(s, "Unexpected character '%c', expecting 't' or 'f'.", c);
 			expr = newError(s);
 		}
-		getc(stream);
 	} else {
 		sprintf(s, "Unexpected character '%c'", c);
 		expr = newError(s);
-		getc(stream);
 	}
 	return expr;
 }
@@ -226,6 +244,38 @@ expr* readInteger(FILE* stream) {
 		ungetc(c, stream);
 	}
 	result = newInteger(parseInt(num));
+	return result;
+}
+
+expr* readCharacter(FILE* stream) {
+	char character;
+	expr* result = malloc(sizeof(expr));
+	char c;
+	
+	c = fgetc(stream);
+	if (c == '\\') {
+		c = fgetc(stream);
+		if (c == 'n') {
+			character = '\n';
+		} else if (c == 'a') {
+			character = '\a';
+		} else if (c == 'b') {
+			character = '\b';
+		} else if (c == 'f') {
+			character = '\f';
+		} else if (c == 't') {
+			character = '\t';
+		} else if (c == '\\') {
+			character = '\\';
+		} else if (c == 's') {
+			character = ' ';
+		} else {
+			return newError("Invalid character");
+		}
+	} else {
+		character = c;
+	}
+	result = newCharacter(character);
 	return result;
 }
 
