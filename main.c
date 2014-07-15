@@ -19,7 +19,7 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer, Boolean, Character, Error } primType;
+typedef enum { Integer, Boolean, Character, String, Error } primType;
 
 typedef struct expr {
 	primType type;
@@ -27,6 +27,7 @@ typedef struct expr {
 		long integer;
 		bool boolean;
 		char character;
+		char* string;
 		char* bottom;
 	} data;
 } expr;
@@ -47,6 +48,14 @@ expr* newCharacter(char value) {
 
 	(*expr).type = Character;
 	(*expr).data.character = value;
+	return expr;
+}
+
+expr* newString(char* value) {
+	expr* expr = malloc(sizeof(expr));
+
+	(*expr).type = String;
+	(*expr).data.string = value;
 	return expr;
 }
 
@@ -100,6 +109,8 @@ expr* readExpr(FILE* stream);
 expr* readInteger(FILE* stream);
 
 expr* readCharacter(FILE* stream);
+
+expr* readString(FILE* stream);
 
 void trimWhitespace(FILE* stream);
 
@@ -173,9 +184,11 @@ void print(expr* prgm) {
 			printf("Unexpected boolean\n");
 		}
 	} else if ((*cur).type == Character) {
-		printf("%c", (*cur).data.character);
+		printf("#'%c", (*cur).data.character);
+	} else if ((*cur).type == String) {
+		printf("\"%s\"", (*cur).data.string);
 	} else if ((*cur).type == Error) {
-		printf("%s", (*cur).data.bottom);
+		printf("Error: %s", (*cur).data.bottom);
 	} else {
 		printf("Error: Unknown expression type.\n0");
 	}
@@ -214,6 +227,8 @@ expr* readExpr(FILE* stream) {
 			sprintf(s, "Unexpected character '%c', expecting 't' or 'f'.", c);
 			expr = newError(s);
 		}
+	} else if (c == '"') {
+		expr = readString(stream);
 	} else {
 		sprintf(s, "Unexpected character '%c'", c);
 		expr = newError(s);
@@ -247,6 +262,31 @@ expr* readInteger(FILE* stream) {
 	return result;
 }
 
+/*maybe*/char readEscape(FILE* stream) {
+	char character;
+	char c;
+	
+	c = fgetc(stream);
+	if (c == 'n') {
+		character = '\n';
+	} else if (c == 'a') {
+		character = '\a';
+	} else if (c == 'b') {
+		character = '\b';
+	} else if (c == 'f') {
+		character = '\f';
+	} else if (c == 't') {
+		character = '\t';
+	} else if (c == '\\') {
+		character = '\\';
+	} else if (c == 's') {
+		character = ' ';
+	} else {
+		return 0;
+	}
+	return character;
+}
+
 expr* readCharacter(FILE* stream) {
 	char character;
 	expr* result = malloc(sizeof(expr));
@@ -254,28 +294,46 @@ expr* readCharacter(FILE* stream) {
 	
 	c = fgetc(stream);
 	if (c == '\\') {
-		c = fgetc(stream);
-		if (c == 'n') {
-			character = '\n';
-		} else if (c == 'a') {
-			character = '\a';
-		} else if (c == 'b') {
-			character = '\b';
-		} else if (c == 'f') {
-			character = '\f';
-		} else if (c == 't') {
-			character = '\t';
-		} else if (c == '\\') {
-			character = '\\';
-		} else if (c == 's') {
-			character = ' ';
-		} else {
-			return newError("Invalid character");
+		character = readEscape(stream);
+		if (!character) {
+			return newError("Invalid escape sequence");
 		}
 	} else {
 		character = c;
 	}
 	result = newCharacter(character);
+	return result;
+}
+
+expr* readString(FILE* stream) {
+	size_t size = 32 * sizeof(char);
+	char* string = malloc(size);
+	expr* result = malloc(sizeof(expr));
+	char c;
+	int pos = 0;
+	
+	c = fgetc(stream);
+	while (c != '"') 
+	{
+		if (c == '\\') {
+			c = readEscape(stream);
+			if (!c) {
+				// Consume the remainder of the string.
+				while (c != '"') {
+					c = fgetc(stream);
+				}
+				return newError("Invalid escape sequence in string");
+			}
+		}
+		string[pos++] = c;
+		if (pos == sizeof(string))
+		{
+			realloc(string, sizeof(string) + size);
+		}
+		c = fgetc(stream);
+	}
+	
+	result = newString(string);
 	return result;
 }
 
