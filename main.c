@@ -288,6 +288,7 @@ expr* readInteger(FILE* stream) {
 		}
 		c = fgetc(stream);
 	}
+    ungetc(c, stream);
 
 	result = newInteger(parseInt(num));
 	return result;
@@ -374,19 +375,23 @@ expr* readPair(FILE* stream) {
 	expr* result = malloc(sizeof(expr));
 	char c;
 
+    c = getc(stream);
+    if (c == ')') {
+        return nil;
+    }
+    ungetc(c, stream);
+
     head = readExpr(stream);
+    trimWhitespace(stream);
 	
 	c = fgetc(stream);
-    trimWhitespace(stream);
 	if (c == '.') {
         trimWhitespace(stream);
         tail = readExpr(stream);
         result = newPair(head, tail);
     } else {
         ungetc(c, stream);
-        expr* thead = malloc(sizeof(expr));
-        thead = readExpr(stream);
-        tail = newPair(thead, nil);
+        tail = readPair(stream);
         result = newPair(head, tail);
     }
 	
