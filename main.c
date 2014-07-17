@@ -19,7 +19,7 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer, Boolean, Character, String, Error } primType;
+typedef enum { Integer, Boolean, Character, String, Pair, Nil, Error } primType;
 
 typedef struct expr {
 	primType type;
@@ -29,11 +29,16 @@ typedef struct expr {
 		char character;
 		char* string;
 		char* bottom;
+        struct {
+            struct expr* head;
+            struct expr* tail;
+        } pair;
 	} data;
 } expr;
 
 expr* boolT;
 expr* boolF;
+expr* nil;
 
 expr* newInteger(long value) {
 	expr* expr = malloc(sizeof(expr));
@@ -59,11 +64,20 @@ expr* newString(char* value) {
 	return expr;
 }
 
+expr* newPair(expr* head, expr* tail) {
+	expr* expr = malloc(sizeof(expr));
+
+	(*expr).type = Pair;
+	(*expr).data.pair.head = head;
+	(*expr).data.pair.tail = tail;
+	return expr;
+}
+
 expr* newError(char* error) {
 	expr* expr = malloc(sizeof(expr));
 
 	(*expr).type = Error;
-	(*expr).data.bottom = error;
+	(*expr).data.bottom = error; /*  */
 	return expr;
 }
 
@@ -79,6 +93,14 @@ bool isCharacter(expr* expr) {
 	return (*expr).type == Character;
 }
 
+bool isPair(expr* expr) {
+	return (*expr).type == Pair;
+}
+
+bool isNil(expr* expr) {
+	return (*expr).type == Nil;
+}
+
 bool isError(expr* expr) {
 	return (*expr).type == Error;
 }
@@ -91,6 +113,9 @@ void initialize(void) {
 	boolF = malloc(sizeof(expr));
 	(*boolF).type = Boolean;
 	(*boolF).data.boolean = false;
+	
+	nil = malloc(sizeof(expr));
+	(*nil).type = Nil;
 }
 
 expr* eval(expr* input);
@@ -112,9 +137,9 @@ expr* readCharacter(FILE* stream);
 
 expr* readString(FILE* stream);
 
-void trimWhitespace(FILE* stream);
+expr* readPair(FILE* stream);
 
-struct cell* parse(char* str);
+void trimWhitespace(FILE* stream);
 
 bool isDigit(char c);
 
@@ -187,6 +212,14 @@ void print(expr* prgm) {
 		printf("#'%c", (*cur).data.character);
 	} else if ((*cur).type == String) {
 		printf("\"%s\"", (*cur).data.string);
+	} else if ((*cur).type == Pair) {
+		printf("(");
+        print((*cur).data.pair.head);
+		printf(" . ");
+        print((*cur).data.pair.tail);
+		printf(")");
+	} else if ((*cur).type == Nil) {
+		printf("()");
 	} else if ((*cur).type == Error) {
 		printf("Error: %s", (*cur).data.bottom);
 	} else {
@@ -229,6 +262,8 @@ expr* readExpr(FILE* stream) {
 		}
 	} else if (c == '"') {
 		expr = readString(stream);
+	} else if (c == '(') {
+		expr = readPair(stream);
 	} else {
 		sprintf(s, "Unexpected character '%c'", c);
 		expr = newError(s);
@@ -254,10 +289,6 @@ expr* readInteger(FILE* stream) {
 		c = fgetc(stream);
 	}
 
-	if (c == ')')
-	{
-		ungetc(c, stream);
-	}
 	result = newInteger(parseInt(num));
 	return result;
 }
@@ -334,6 +365,31 @@ expr* readString(FILE* stream) {
 	}
 	
 	result = newString(string);
+	return result;
+}
+
+expr* readPair(FILE* stream) {
+	expr* head = malloc(sizeof(expr));
+	expr* tail = malloc(sizeof(expr));
+	expr* result = malloc(sizeof(expr));
+	char c;
+
+    head = readExpr(stream);
+	
+	c = fgetc(stream);
+    trimWhitespace(stream);
+	if (c == '.') {
+        trimWhitespace(stream);
+        tail = readExpr(stream);
+        result = newPair(head, tail);
+    } else {
+        ungetc(c, stream);
+        expr* thead = malloc(sizeof(expr));
+        thead = readExpr(stream);
+        tail = newPair(thead, nil);
+        result = newPair(head, tail);
+    }
+	
 	return result;
 }
 
