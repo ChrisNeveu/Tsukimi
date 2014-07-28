@@ -9,7 +9,7 @@
 
 expr* head(expr* e) {
 	if (isPair(e)) {
-		return (*e).data.pair.head;
+		return e->data.pair.head;
 	} else {
 		fprintf(stderr, "Cannot get head of non-pair\n");
 		exit(1);
@@ -18,7 +18,7 @@ expr* head(expr* e) {
 
 expr* tail(expr* e) {
 	if (isPair(e)) {
-		return (*e).data.pair.tail;
+		return e->data.pair.tail;
 	} else {
 		fprintf(stderr, "Cannot get tail of non-pair\n");
 		exit(1);
@@ -135,9 +135,9 @@ void printList(expr* list) {
 void print(expr* prgm) {
 	expr* cur = prgm;
 
-	if ((*cur).type == Integer) {
+	if (cur->type == Integer) {
 		printf("%ld", (*cur).data.integer);
-	} else if ((*cur).type == Boolean) {
+	} else if (cur->type == Boolean) {
 		if (cur == boolT) {
 			printf("#t");
 		} else if (cur == boolF) {
@@ -145,20 +145,20 @@ void print(expr* prgm) {
 		} else {
 			printf("Unexpected boolean\n");
 		}
-	} else if ((*cur).type == Character) {
+	} else if (cur->type == Character) {
 		printf("#'%c", (*cur).data.character);
-	} else if ((*cur).type == String) {
+	} else if (cur->type == String) {
 		printf("\"%s\"", (*cur).data.string);
-	} else if ((*cur).type == Identifier) {
+	} else if (cur->type == Identifier) {
 		printf("%s", (*cur).data.identifier);
-	} else if ((*cur).type == Pair) {
+	} else if (cur->type == Pair) {
 		printf("(");
         printList(cur);
 		printf(")");
-	} else if ((*cur).type == Nil) {
+	} else if (cur->type == Nil) {
 		printf("()");
-	} else if ((*cur).type == Error) {
-		printf("Error: %s", (*cur).data.bottom);
+	} else if (cur->type == Error) {
+		printf("Error: %s", cur->data.bottom);
 	} else {
 		printf("Error: Unknown expression type.\n0");
 	}
