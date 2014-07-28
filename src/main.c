@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include <strmap.h>
 
 // ◥▶◀◤
 
@@ -19,7 +21,16 @@ typedef struct cell
 } cell;
 */
 
-typedef enum { Integer, Boolean, Character, String, Pair, Nil, Error } primType;
+typedef enum {
+	Boolean,
+	Character,
+	Error,
+	Identifier,
+	Integer,
+	Nil,
+	Pair,
+	String
+} primType;
 
 typedef struct expr {
 	primType type;
@@ -28,17 +39,19 @@ typedef struct expr {
 		bool boolean;
 		char character;
 		char* string;
+		char* identifier;
 		char* bottom;
-        struct {
-            struct expr* head;
-            struct expr* tail;
-        } pair;
+		struct {
+			struct expr* head;
+			struct expr* tail;
+		} pair;
 	} data;
 } expr;
 
 expr* boolT;
 expr* boolF;
 expr* nil;
+StrMap* identifiers;
 
 expr* newInteger(long value) {
 	expr* expr = malloc(sizeof(expr));
@@ -77,7 +90,18 @@ expr* newError(char* error) {
 	expr* expr = malloc(sizeof(expr));
 
 	(*expr).type = Error;
-	(*expr).data.bottom = error; /*  */
+	(*expr).data.bottom = error;
+	return expr;
+}
+
+expr* newIdentifier(char* name) {
+	expr* expr = malloc(sizeof(expr));
+
+	// Add identifier to the lookup table.
+	sm_put(identifiers, name, NULL);
+
+	(*expr).type = Identifier;
+	(*expr).data.identifier = name;
 	return expr;
 }
 
@@ -93,6 +117,14 @@ bool isCharacter(expr* expr) {
 	return (*expr).type == Character;
 }
 
+bool isIdentifier(expr* expr) {
+	return (*expr).type == Identifier;
+}
+
+bool isString(expr* expr) {
+	return (*expr).type == String;
+}
+
 bool isPair(expr* expr) {
 	return (*expr).type == Pair;
 }
@@ -106,28 +138,25 @@ bool isError(expr* expr) {
 }
 
 void initialize(void) {
+    // Create Boolean True object
 	boolT = malloc(sizeof(expr));
 	(*boolT).type = Boolean;
 	(*boolT).data.boolean = true;
-	
+
+    // Create Boolean False object
 	boolF = malloc(sizeof(expr));
 	(*boolF).type = Boolean;
 	(*boolF).data.boolean = false;
-	
+
+    // Create Nil object
 	nil = malloc(sizeof(expr));
 	(*nil).type = Nil;
+    
+    // Create Identifier Lookup Table
+    identifiers = sm_new(100);
 }
 
 expr* eval(expr* input);
-/*
-cell* readCell(FILE* stream);
-
-cell* readInt(FILE* stream);
-
-cell* readList(FILE* stream);
-
-cell* readIdentifier(FILE* stream);
-*/
 
 expr* readExpr(FILE* stream);
 
@@ -137,13 +166,15 @@ expr* readCharacter(FILE* stream);
 
 expr* readString(FILE* stream);
 
+expr* readIdentifier(FILE* stream);
+
 expr* readPair(FILE* stream);
 
 void trimWhitespace(FILE* stream);
 
-bool isDigit(char c);
+bool taggedWith(expr* expr, char* tag);
 
-void print(expr* );
+void print(expr* prgm);
 
 char peek(FILE* stream)
 {
@@ -163,21 +194,11 @@ int main()
 
 	while(1)
 	{
-		print(readExpr(stdin));
+		print(eval(readExpr(stdin)));
 		printf("\n⤿ ");
 	}
 
 	return 0;
-}
-
-bool isDigit(char c)
-{
-	if (c == '0' || c == '1' || c == '2' || c == '3' || c == '4' || 
-		c == '5' || c == '6' || c == '7' || c == '8' || c == '9')
-	{
-		return true;
-	}
-	return false;
 }
 
 void trimWhitespace(FILE* stream)
@@ -191,8 +212,33 @@ void trimWhitespace(FILE* stream)
 	ungetc(c, stream);
 }
 
+bool selfEvaluating(expr* expr) {
+	return isBoolean(expr)
+		|| isCharacter(expr)
+		|| isInteger(expr)
+		|| isString(expr);
+}
+
+bool taggedWith(expr* input, char* tag) {
+	expr* head;
+	
+	if (isPair(input)) {
+		head = (*input).data.pair.head;
+		return isIdentifier(head)
+			&& (strcmp((*head).data.identifier, tag) == 0);
+	} else {
+		return false;
+	}
+}
+
 expr* eval(expr* input) {
-	return input;
+	if (selfEvaluating(input)) {
+		return input;
+	} else if (taggedWith(input, "quote")) {
+		return (*((*input).data.pair.tail)).data.pair.head;
+	} else {
+		return newError("Cannot evaluate expression.");
+	}
 }
 
 void print(expr* prgm) {
@@ -212,6 +258,8 @@ void print(expr* prgm) {
 		printf("#'%c", (*cur).data.character);
 	} else if ((*cur).type == String) {
 		printf("\"%s\"", (*cur).data.string);
+	} else if ((*cur).type == Identifier) {
+		printf("%s", (*cur).data.identifier);
 	} else if ((*cur).type == Pair) {
 		printf("(");
         print((*cur).data.pair.head);
@@ -245,7 +293,7 @@ expr* readExpr(FILE* stream) {
 
 	c = getc(stream);
 
-	if (isDigit(c) || c == '-') {
+	if (isdigit(c) || c == '-') {
 		ungetc(c, stream);
 		expr = readInteger(stream);
 	} else if (c == '#') {
@@ -264,6 +312,9 @@ expr* readExpr(FILE* stream) {
 		expr = readString(stream);
 	} else if (c == '(') {
 		expr = readPair(stream);
+	} else if (isalpha(c)) {
+		ungetc(c, stream);
+		expr = readIdentifier(stream);
 	} else {
 		sprintf(s, "Unexpected character '%c'", c);
 		expr = newError(s);
@@ -369,31 +420,53 @@ expr* readString(FILE* stream) {
 	return result;
 }
 
+expr* readIdentifier(FILE* stream) {
+	size_t size = 32 * sizeof(char);
+	char* string = malloc(size);
+	expr* result = malloc(sizeof(expr));
+	char c;
+	int pos = 0;
+	
+	c = fgetc(stream);
+	while (isalpha(c)) 
+	{
+		string[pos++] = c;
+		if (pos == sizeof(string))
+		{
+			realloc(string, sizeof(string) + size);
+		}
+		c = fgetc(stream);
+	}
+	
+	result = newIdentifier(string);
+	return result;
+}
+
 expr* readPair(FILE* stream) {
 	expr* head = malloc(sizeof(expr));
 	expr* tail = malloc(sizeof(expr));
 	expr* result = malloc(sizeof(expr));
 	char c;
 
-    c = getc(stream);
-    if (c == ')') {
-        return nil;
-    }
-    ungetc(c, stream);
+	c = getc(stream);
+	if (c == ')') {
+		return nil;
+	}
+	ungetc(c, stream);
 
-    head = readExpr(stream);
-    trimWhitespace(stream);
+	head = readExpr(stream);
+	trimWhitespace(stream);
 	
 	c = fgetc(stream);
 	if (c == '.') {
-        trimWhitespace(stream);
-        tail = readExpr(stream);
-        result = newPair(head, tail);
-    } else {
-        ungetc(c, stream);
-        tail = readPair(stream);
-        result = newPair(head, tail);
-    }
+		trimWhitespace(stream);
+		tail = readExpr(stream);
+		result = newPair(head, tail);
+	} else {
+		ungetc(c, stream);
+		tail = readPair(stream);
+		result = newPair(head, tail);
+	}
 	
 	return result;
 }
