@@ -3,157 +3,26 @@
 #include <string.h>
 #include <ctype.h>
 #include <strmap.h>
+#include <expr.h>
 
-// ◥▶◀◤
+// ◥▶◀◤ \\
 
-typedef enum { false, true } bool;
-
-/*
-typedef struct cell
-{
-	int carTag;
-	union
-	{
-		char* atom;
-		struct cell* list;
-	} car;
-	struct cell* cdr;
-} cell;
-*/
-
-typedef enum {
-	Boolean,
-	Character,
-	Error,
-	Identifier,
-	Integer,
-	Nil,
-	Pair,
-	String
-} primType;
-
-typedef struct expr {
-	primType type;
-	union {
-		long integer;
-		bool boolean;
-		char character;
-		char* string;
-		char* identifier;
-		char* bottom;
-		struct {
-			struct expr* head;
-			struct expr* tail;
-		} pair;
-	} data;
-} expr;
-
-expr* boolT;
-expr* boolF;
-expr* nil;
-StrMap* identifiers;
-
-expr* newInteger(long value) {
-	expr* expr = malloc(sizeof(expr));
-
-	(*expr).type = Integer;
-	(*expr).data.integer = value;
-	return expr;
+expr* head(expr* e) {
+	if (isPair(e)) {
+		return (*e).data.pair.head;
+	} else {
+		fprintf(stderr, "Cannot get head of non-pair\n");
+		exit(1);
+	}
 }
 
-expr* newCharacter(char value) {
-	expr* expr = malloc(sizeof(expr));
-
-	(*expr).type = Character;
-	(*expr).data.character = value;
-	return expr;
-}
-
-expr* newString(char* value) {
-	expr* expr = malloc(sizeof(expr));
-
-	(*expr).type = String;
-	(*expr).data.string = value;
-	return expr;
-}
-
-expr* newPair(expr* head, expr* tail) {
-	expr* expr = malloc(sizeof(expr));
-
-	(*expr).type = Pair;
-	(*expr).data.pair.head = head;
-	(*expr).data.pair.tail = tail;
-	return expr;
-}
-
-expr* newError(char* error) {
-	expr* expr = malloc(sizeof(expr));
-
-	(*expr).type = Error;
-	(*expr).data.bottom = error;
-	return expr;
-}
-
-expr* newIdentifier(char* name) {
-	expr* expr = malloc(sizeof(expr));
-
-	// Add identifier to the lookup table.
-	sm_put(identifiers, name, NULL);
-
-	(*expr).type = Identifier;
-	(*expr).data.identifier = name;
-	return expr;
-}
-
-bool isInteger(expr* expr) {
-	return (*expr).type == Integer;
-}
-
-bool isBoolean(expr* expr) {
-	return (*expr).type == Boolean;
-}
-
-bool isCharacter(expr* expr) {
-	return (*expr).type == Character;
-}
-
-bool isIdentifier(expr* expr) {
-	return (*expr).type == Identifier;
-}
-
-bool isString(expr* expr) {
-	return (*expr).type == String;
-}
-
-bool isPair(expr* expr) {
-	return (*expr).type == Pair;
-}
-
-bool isNil(expr* expr) {
-	return (*expr).type == Nil;
-}
-
-bool isError(expr* expr) {
-	return (*expr).type == Error;
-}
-
-void initialize(void) {
-    // Create Boolean True object
-	boolT = malloc(sizeof(expr));
-	(*boolT).type = Boolean;
-	(*boolT).data.boolean = true;
-
-    // Create Boolean False object
-	boolF = malloc(sizeof(expr));
-	(*boolF).type = Boolean;
-	(*boolF).data.boolean = false;
-
-    // Create Nil object
-	nil = malloc(sizeof(expr));
-	(*nil).type = Nil;
-    
-    // Create Identifier Lookup Table
-    identifiers = sm_new(100);
+expr* tail(expr* e) {
+	if (isPair(e)) {
+		return (*e).data.pair.tail;
+	} else {
+		fprintf(stderr, "Cannot get tail of non-pair\n");
+		exit(1);
+	}
 }
 
 expr* eval(expr* input);
@@ -186,9 +55,7 @@ char peek(FILE* stream)
 
 int main()
 {
-	char* stmnt;
-
-	initialize();
+	initStaticObjects();
 
 	printf("Welcome to CAN-Scheme. \n⤿ ");
 
@@ -212,20 +79,31 @@ void trimWhitespace(FILE* stream)
 	ungetc(c, stream);
 }
 
+bool isIdentChar(char c) {
+	return isalpha(c)
+		|| c == '+'
+		|| c == '-'
+		|| c == '!'
+		|| c == '?'
+		|| c == '*'
+		|| c == '/';
+}
+
 bool selfEvaluating(expr* expr) {
 	return isBoolean(expr)
 		|| isCharacter(expr)
+		|| isError(expr)
 		|| isInteger(expr)
 		|| isString(expr);
 }
 
 bool taggedWith(expr* input, char* tag) {
-	expr* head;
+	expr* h;
 	
 	if (isPair(input)) {
-		head = (*input).data.pair.head;
-		return isIdentifier(head)
-			&& (strcmp((*head).data.identifier, tag) == 0);
+		h = head(input);
+		return isIdentifier(h)
+			&& (strcmp((*h).data.identifier, tag) == 0);
 	} else {
 		return false;
 	}
@@ -235,9 +113,22 @@ expr* eval(expr* input) {
 	if (selfEvaluating(input)) {
 		return input;
 	} else if (taggedWith(input, "quote")) {
-		return (*((*input).data.pair.tail)).data.pair.head;
+		return head(tail(input));
 	} else {
 		return newError("Cannot evaluate expression.");
+	}
+}
+
+void printList(expr* list) {
+		print(head(list));
+	if (isNil(tail(list))) {
+		return;
+	} else if (isPair(tail(list))) {
+		printf(" ");
+		printList(tail(list));
+	} else {
+		printf(" . ");
+		print(tail(list));
 	}
 }
 
@@ -262,9 +153,7 @@ void print(expr* prgm) {
 		printf("%s", (*cur).data.identifier);
 	} else if ((*cur).type == Pair) {
 		printf("(");
-        print((*cur).data.pair.head);
-		printf(" . ");
-        print((*cur).data.pair.tail);
+        printList(cur);
 		printf(")");
 	} else if ((*cur).type == Nil) {
 		printf("()");
@@ -312,7 +201,7 @@ expr* readExpr(FILE* stream) {
 		expr = readString(stream);
 	} else if (c == '(') {
 		expr = readPair(stream);
-	} else if (isalpha(c)) {
+	} else if (isIdentChar(c)) {
 		ungetc(c, stream);
 		expr = readIdentifier(stream);
 	} else {
@@ -428,7 +317,7 @@ expr* readIdentifier(FILE* stream) {
 	int pos = 0;
 	
 	c = fgetc(stream);
-	while (isalpha(c)) 
+	while (isIdentChar(c)) 
 	{
 		string[pos++] = c;
 		if (pos == sizeof(string))
@@ -437,14 +326,15 @@ expr* readIdentifier(FILE* stream) {
 		}
 		c = fgetc(stream);
 	}
+	ungetc(c, stream);
 	
 	result = newIdentifier(string);
 	return result;
 }
 
 expr* readPair(FILE* stream) {
-	expr* head = malloc(sizeof(expr));
-	expr* tail = malloc(sizeof(expr));
+	expr* h = malloc(sizeof(expr));
+	expr* t = malloc(sizeof(expr));
 	expr* result = malloc(sizeof(expr));
 	char c;
 
@@ -454,137 +344,25 @@ expr* readPair(FILE* stream) {
 	}
 	ungetc(c, stream);
 
-	head = readExpr(stream);
+	h = readExpr(stream);
 	trimWhitespace(stream);
 	
 	c = fgetc(stream);
 	if (c == '.') {
 		trimWhitespace(stream);
-		tail = readExpr(stream);
-		result = newPair(head, tail);
+		t = readExpr(stream);
+		c = getc(stream);
+		if (c != ')') {
+			result = newError("Expected character ')'");
+		} else {
+			result = newPair(h, t);
+		}
 	} else {
 		ungetc(c, stream);
-		tail = readPair(stream);
-		result = newPair(head, tail);
+		t = readPair(stream);
+		result = newPair(h, t);
 	}
 	
 	return result;
 }
-
-/*
-cell* readCell(FILE* stream)
-{
-	char c;
-
-	trimWhitespace(stream);
-
-	c = fgetc(stream);
-
-	if (isDigit(c) || c == '-')
-	{
-		ungetc(c, stream);
-		return readInt(stream);
-	}
-	else if (c == '(')
-	{
-		return readList(stream);
-	}
-	else
-	{
-		ungetc(c, stream);
-		return readIdentifier(stream);
-	}
-}
-*/
-/*
-cell* readInt(FILE* stream)
-{
-	size_t size = 32 * sizeof(char);
-	char* num = malloc(size);
-	cell* result = malloc(sizeof(cell));
-	char c;
-	int pos = 0;
-	
-	c = fgetc(stream);
-	while (c != ' ' && c != ')' && c != '\n') 
-	{
-		num[pos++] = c;
-		if (pos == sizeof(num))
-		{
-			realloc(num, sizeof(num) + size);
-		}
-		c = fgetc(stream);
-	}
-
-	if (c == ')')
-	{
-		ungetc(c, stream);
-	}
-
-	//result.car = parseInt(num);
-	(*result).car.atom = num;
-	(*result).carTag = 0;
-	return result;
-}
-*/
-/*
-cell* readIdentifier(FILE* stream)
-{
-	size_t size = 32;
-	char* ident = malloc(size);
-	cell* result = malloc(sizeof(cell));
-	char c;
-	int pos = 0;
-
-	c = fgetc(stream);
-	while (c != ' ' && c != ')' && c != '\n')
-	{
-		ident[pos++] = c;
-		if (pos == sizeof(ident))
-		{
-			realloc(ident, sizeof(ident) + size);
-		}
-		c = fgetc(stream);
-	}
-
-	if (c == ')')
-	{
-		ungetc(c, stream);
-	}
-
-	(*result).car.atom = ident;
-	(*result).carTag = 0;
-	return result;
-}
-*/
-/*
-cell* readList(FILE* stream)
-{
-	char c;
-	cell* result = malloc(sizeof(cell));
-	cell* cur;
-
-	c = fgetc(stream);
-	if (c == ')')
-	{
-		//return nil
-	}
-	ungetc(c, stream);
-
-	(*result).car.list = readCell(stream);
-	(*result).carTag = 1;
-	cur = (*result).car.list;
-
-	c = fgetc(stream);
-	while (c != ')')
-	{
-		ungetc(c, stream);
-		(*cur).cdr = readCell(stream);
-		cur = (*cur).cdr;
-		c = fgetc(stream);
-	}
-	c = fgetc(stream); //Pop off the \n
-	return result;
-}
-*/
 
