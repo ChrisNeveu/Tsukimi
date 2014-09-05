@@ -11,7 +11,7 @@ typedef enum {
 	String
 } primType;
 
-typedef struct expr {
+typedef struct Expr {
 	primType type;
 	union {
 		long integer;
@@ -21,41 +21,41 @@ typedef struct expr {
 		char* identifier;
 		char* bottom;
 		struct {
-			struct expr* head;
-			struct expr* tail;
+			struct Expr* head;
+			struct Expr* tail;
 		} pair;
 	} data;
-} expr;
+} Expr;
 
 /**
  * These are static objects, they must be created with
  * initStaticObjects before use.
  */
-expr* boolT;
-expr* boolF;
-expr* nil;
-StrMap* identifiers;
+Expr* boolT;
+Expr* boolF;
+Expr* nil;
+//ExprMap* identifiers;
 void initStaticObjects(void);
 
 
 /**
- * The following functions instantiate exprs of their respective types.
+ * The following functions instantiate Exprs of their respective types.
  */
-expr* newCharacter(char value);
-expr* newError(char* error);
-expr* newIdentifier(char* name);
-expr* newInteger(long value);
-expr* newPair(expr* head, expr* tail);
-expr* newString(char* value);
+Expr* newCharacter(char value);
+Expr* newError(char* error);
+Expr* newIdentifier(char* name);
+Expr* newInteger(long value);
+Expr* newPair(Expr* head, Expr* tail);
+Expr* newString(char* value);
 
 /**
- * The following functions identify the type of an expr.
+ * The following functions identify the type of an Expr.
  */
-bool isBoolean(expr* e);
-bool isCharacter(expr* e);
-bool isError(expr* e);
-bool isIdentifier(expr* e);
-bool isInteger(expr* e);
-bool isNil(expr* e);
-bool isPair(expr* e);
-bool isString(expr* e);
+bool isBoolean(Expr* e);
+bool isCharacter(Expr* e);
+bool isError(Expr* e);
+bool isIdentifier(Expr* e);
+bool isInteger(Expr* e);
+bool isNil(Expr* e);
+bool isPair(Expr* e);
+bool isString(Expr* e);

@@ -1,1 +1,1 @@
-gcc src/* lib/* -Iinclude
+gcc -std=c99 src/* -Iinclude

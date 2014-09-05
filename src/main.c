@@ -2,12 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <strmap.h>
-#include <expr.h>
+#include <exprmap.h>
 
 // ◥▶◀◤ \\
 
-expr* head(expr* e) {
+Expr* head(Expr* e) {
 	if (isPair(e)) {
 		return e->data.pair.head;
 	} else {
@@ -16,7 +15,7 @@ expr* head(expr* e) {
 	}
 }
 
-expr* tail(expr* e) {
+Expr* tail(Expr* e) {
 	if (isPair(e)) {
 		return e->data.pair.tail;
 	} else {
@@ -25,25 +24,41 @@ expr* tail(expr* e) {
 	}
 }
 
-expr* eval(expr* input);
+// Global identifier map.
+ExprMap* identifiers;
 
-expr* readExpr(FILE* stream);
+void addIdentifier(Expr* expr) {
+	char* key;
 
-expr* readInteger(FILE* stream);
+	if (isIdentifier(expr)) {
+		key = expr->data.identifier;
+	} else {
+		fprintf(stderr, "ERROR: Expr of addIdentifier must be an identifier.\n");
+		exit(1);
+	}
+	// Add identifier to the lookup table.
+	putExpr(identifiers, key, expr);
+}
 
-expr* readCharacter(FILE* stream);
+Expr* eval(Expr* input);
 
-expr* readString(FILE* stream);
+Expr* readExpr(FILE* stream);
 
-expr* readIdentifier(FILE* stream);
+Expr* readInteger(FILE* stream);
 
-expr* readPair(FILE* stream);
+Expr* readCharacter(FILE* stream);
+
+Expr* readString(FILE* stream);
+
+Expr* readIdentifier(FILE* stream);
+
+Expr* readPair(FILE* stream);
 
 void trimWhitespace(FILE* stream);
 
-bool taggedWith(expr* expr, char* tag);
+bool taggedWith(Expr* Expr, char* tag);
 
-void print(expr* prgm);
+void print(Expr* prgm);
 
 char peek(FILE* stream)
 {
@@ -56,6 +71,7 @@ char peek(FILE* stream)
 int main()
 {
 	initStaticObjects();
+	identifiers = newExprMap(100);
 
 	printf("Welcome to CAN-Scheme. \n⤿ ");
 
@@ -89,7 +105,7 @@ bool isIdentChar(char c) {
 		|| c == '/';
 }
 
-bool selfEvaluating(expr* expr) {
+bool selfEvaluating(Expr* expr) {
 	return isBoolean(expr)
 		|| isCharacter(expr)
 		|| isError(expr)
@@ -97,8 +113,8 @@ bool selfEvaluating(expr* expr) {
 		|| isString(expr);
 }
 
-bool taggedWith(expr* input, char* tag) {
-	expr* h;
+bool taggedWith(Expr* input, char* tag) {
+	Expr* h;
 	
 	if (isPair(input)) {
 		h = head(input);
@@ -109,7 +125,7 @@ bool taggedWith(expr* input, char* tag) {
 	}
 }
 
-expr* eval(expr* input) {
+Expr* eval(Expr* input) {
 	if (selfEvaluating(input)) {
 		return input;
 	} else if (taggedWith(input, "quote")) {
@@ -119,7 +135,7 @@ expr* eval(expr* input) {
 	}
 }
 
-void printList(expr* list) {
+void printList(Expr* list) {
 		print(head(list));
 	if (isNil(tail(list))) {
 		return;
@@ -132,8 +148,8 @@ void printList(expr* list) {
 	}
 }
 
-void print(expr* prgm) {
-	expr* cur = prgm;
+void print(Expr* prgm) {
+	Expr* cur = prgm;
 
 	if (cur->type == Integer) {
 		printf("%ld", (*cur).data.integer);
@@ -160,7 +176,7 @@ void print(expr* prgm) {
 	} else if (cur->type == Error) {
 		printf("Error: %s", cur->data.bottom);
 	} else {
-		printf("Error: Unknown expression type.\n0");
+		printf("Error: Unknown expression type.");
 	}
 }
 
@@ -172,10 +188,10 @@ int parseInt(char* intString)
 	return strtol(intString, &leftover, base);
 }
 
-expr* readExpr(FILE* stream) {
+Expr* readExpr(FILE* stream) {
 	size_t size = 32 * sizeof(char);
 	char c;
-	expr* expr;
+	Expr* expr;
 	char* s = malloc(size);
 
 	trimWhitespace(stream);
@@ -211,10 +227,10 @@ expr* readExpr(FILE* stream) {
 	return expr;
 }
 
-expr* readInteger(FILE* stream) {
+Expr* readInteger(FILE* stream) {
 	size_t size = 32 * sizeof(char);
 	char* num = malloc(size);
-	expr* result = malloc(sizeof(expr));
+	Expr* result = malloc(sizeof(Expr));
 	char c;
 	int pos = 0;
 	
@@ -259,9 +275,9 @@ expr* readInteger(FILE* stream) {
 	return character;
 }
 
-expr* readCharacter(FILE* stream) {
+Expr* readCharacter(FILE* stream) {
 	char character;
-	expr* result = malloc(sizeof(expr));
+	Expr* result = malloc(sizeof(Expr));
 	char c;
 	
 	c = fgetc(stream);
@@ -277,10 +293,10 @@ expr* readCharacter(FILE* stream) {
 	return result;
 }
 
-expr* readString(FILE* stream) {
+Expr* readString(FILE* stream) {
 	size_t size = 32 * sizeof(char);
 	char* string = malloc(size);
-	expr* result = malloc(sizeof(expr));
+	Expr* result = malloc(sizeof(Expr));
 	char c;
 	int pos = 0;
 	
@@ -309,10 +325,10 @@ expr* readString(FILE* stream) {
 	return result;
 }
 
-expr* readIdentifier(FILE* stream) {
+Expr* readIdentifier(FILE* stream) {
 	size_t size = 32 * sizeof(char);
 	char* string = malloc(size);
-	expr* result = malloc(sizeof(expr));
+	Expr* result = malloc(sizeof(Expr));
 	char c;
 	int pos = 0;
 	
@@ -329,13 +345,16 @@ expr* readIdentifier(FILE* stream) {
 	ungetc(c, stream);
 	
 	result = newIdentifier(string);
+
+	addIdentifier(result);
+	
 	return result;
 }
 
-expr* readPair(FILE* stream) {
-	expr* h = malloc(sizeof(expr));
-	expr* t = malloc(sizeof(expr));
-	expr* result = malloc(sizeof(expr));
+Expr* readPair(FILE* stream) {
+	Expr* h = malloc(sizeof(Expr));
+	Expr* t = malloc(sizeof(Expr));
+	Expr* result = malloc(sizeof(Expr));
 	char c;
 
 	c = getc(stream);
