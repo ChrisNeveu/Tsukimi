@@ -24,10 +24,58 @@ Expr* tail(Expr* e) {
 	}
 }
 
-// Global identifier map.
-ExprMap* identifiers;
+typedef struct Environment {
+	struct Environment* parent;
+	ExprMap* identifiers;
+} Environment;
 
-void addIdentifier(Expr* expr) {
+Environment* newEnvironment(Environment* parent) {
+	Environment* env;
+	
+	env = malloc(sizeof(Environment));
+	if (env == NULL) {
+		return NULL;
+	}
+	env->identifiers = newExprMap(100);
+	if (env->identifiers == NULL) {
+		free(env);
+		return NULL;
+	} else {
+		return env;
+	}
+}
+
+bool lookupIdent(Environment* env, char* key, Expr* outputBuffer) {
+	ExprMap* currMap;
+	Environment* currEnv;
+	currMap = env->identifiers;
+	if (getExpr(currMap, key, outputBuffer)) {
+		return true;
+	}
+
+	while (currEnv->parent) {
+		currEnv = currEnv->parent;
+		currMap = env->identifiers;
+		if (getExpr(currMap, key, outputBuffer)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool addIdent(Environment* env, char* key, Expr* expr) {
+	ExprMap* currMap;
+
+	currMap = env->identifiers;
+
+	// Add identifier to the lookup table.
+	putExpr(currMap, key, expr);
+}
+
+// Global Environment
+Environment* globalEnv;
+
+void addIdentifier(Expr* expr, Expr* val) {
 	char* key;
 
 	if (isIdentifier(expr)) {
@@ -37,7 +85,7 @@ void addIdentifier(Expr* expr) {
 		exit(1);
 	}
 	// Add identifier to the lookup table.
-	putExpr(identifiers, key, expr);
+	addIdent(globalEnv, key, val);
 }
 
 Expr* eval(Expr* input);
@@ -71,7 +119,7 @@ char peek(FILE* stream)
 int main()
 {
 	initStaticObjects();
-	identifiers = newExprMap(100);
+	globalEnv = newEnvironment(NULL);
 
 	printf("Welcome to CAN-Scheme. \n⤿ ");
 
@@ -126,10 +174,19 @@ bool taggedWith(Expr* input, char* tag) {
 }
 
 Expr* eval(Expr* input) {
+	Expr* val = malloc(sizeof(Expr));
+	char* key;
 	if (selfEvaluating(input)) {
 		return input;
 	} else if (taggedWith(input, "quote")) {
 		return head(tail(input));
+	} else if (isIdentifier(input)) {
+		key = input->data.identifier;
+		if (lookupIdent(globalEnv, key, val)) {
+			return val;
+		} else {
+			return newError("Unbound identifier.");
+		}
 	} else {
 		return newError("Cannot evaluate expression.");
 	}
@@ -346,7 +403,7 @@ Expr* readIdentifier(FILE* stream) {
 	
 	result = newIdentifier(string);
 
-	addIdentifier(result);
+	addIdentifier(result, result);
 	
 	return result;
 }
